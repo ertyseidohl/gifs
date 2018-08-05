@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<title>Document</title>
+	<script src="../jsgif-master/LZWEncoder.js"></script>
+	<script src="../jsgif-master/NeuQuant.js"></script>
+	<script src="../jsgif-master/GIFEncoder.js"></script>
+	<script src="../jsgif-master/b64.js"></script>
+	
+</head>
+
+<body>
+	<canvas id="canvas"></canvas>
+
+	<script>
+		"use strict";
+		(function () {
+			var c = document.getElementById("canvas");
+			var ctx = c.getContext("2d");
+
+			var WIDTH = 500;
+			var HEIGHT = 500;
+
+			var BG_COLOR = "#222";
+			var LINE_COLOR = "#eef";
+
+			var ORIGIN = [
+				WIDTH / 2, HEIGHT / 2
+			];
+			
+			var SPEED = 1;
+
+			var MAX_LINES = 10000;
+
+			var SIDES = 3;
+			var START_SIZE = 200;
+			var ADJ_AMT = 0.15;
+
+			var BORDER_WIDTH = 10;
+			
+			var NUM_SHAPES = 1;
+			var SHAPE_SIDE_OFFSET = 20;
+			
+			var FPS = 30;
+			
+			c.width = WIDTH;
+			c.height = HEIGHT;
+
+			function render(sides) {
+				
+				var vectors = [];
+
+				//Draw Shape
+				var mainAngle = Math.PI * 2 / (sides);
+				
+				
+				var sideLength = 2 * START_SIZE * Math.sin(Math.PI / sides);
+				
+				var R = START_SIZE;
+				
+				var θ = (Math.PI / 2) - (Math.PI / sides)
+				
+				var from = [
+					ORIGIN[0],
+					ORIGIN[1]
+				];
+				vectors.push(from.slice());
+				
+				var to = [undefined, undefined];
+				var shape = [];
+				
+				var angle = 0;
+
+				for (var i = 0; i < sides; i++) {
+					to[0] = from[0] + (Math.cos(angle) * sideLength);
+					to[1] = from[1] + (Math.sin(angle) * sideLength);
+
+					vectors.push(to.slice());
+					shape.push(to.slice());
+
+					angle += mainAngle;
+
+					from = to;
+				}
+
+				//draw inners
+
+				var lines = 0;
+				var magnitude = sideLength;
+				var from = ORIGIN.slice();
+				while (lines < MAX_LINES && magnitude > 1) {
+					var sideMid = shape[lines % sides];
+					var sideEnd = shape[(lines + 1) % sides];
+
+					to = [
+						(sideEnd[0] * ADJ_AMT) + (sideMid[0] * (1 - ADJ_AMT)),
+						(sideEnd[1] * ADJ_AMT) + (sideMid[1] * (1 - ADJ_AMT))
+					];
+
+
+					vectors.push(to.slice());
+					shape[lines % sides] = to.slice();
+					lines++;
+					from = to;
+				}
+
+
+
+				//draw all
+				var vec = ORIGIN.slice();
+				ctx.beginPath();
+				
+				ctx.strokeStyle = LINE_COLOR;
+				ctx.lineWidth = BORDER_WIDTH;
+				ctx.arc(ORIGIN[0], ORIGIN[1], START_SIZE, 0, Math.PI * 2);
+				ctx.stroke();
+				
+				ctx.beginPath();
+				ctx.lineCap = "round";
+				
+				ctx.lineWidth = 1;
+				var t = [-(R * Math.cos(θ)),
+						-(R * Math.sin(θ))];
+				ctx.moveTo(ORIGIN[0] + t[0], ORIGIN[1] + t[1]);
+				for (var v in vectors) {
+					ctx.lineTo(
+						vectors[v][0] + t[0], vectors[v][1] + t[1]
+					);
+				}
+				ctx.stroke();
+				
+				return R - dist(
+					ORIGIN,
+					[
+						vectors[vectors.length - 1][0] + t[0],
+						vectors[vectors.length - 1][1] + t[1]
+					]
+				);
+			}
+			
+			function dist(a, b) {
+				return Math.sqrt(
+					Math.pow(b[0] - a[0], 2) + Math.pow(b[1] - a[1], 2)
+				);
+			}
+			
+			
+			var shapes = [];
+			for (var i = 0; i < NUM_SHAPES; i++) {
+				shapes.push(SIDES + (i * SHAPE_SIDE_OFFSET));
+			}
+			
+			var encoder = new GIFEncoder();
+			encoder.setRepeat(0);
+  			encoder.setDelay(1000/FPS);
+			encoder.start();
+
+			var i = setInterval(function () {
+				ctx.fillStyle = BG_COLOR;
+				ctx.fillRect(0, 0, WIDTH, HEIGHT);
+				
+				for (var s in shapes) {
+					var size = render(shapes[s]);
+					shapes[s] += SPEED;
+					if (size < BORDER_WIDTH) {
+						clearInterval(i);
+						encoder.finish();
+						var binary_gif = encoder.stream().getData();
+						var data_url = 'data:image/gif;base64,'+encode64(binary_gif);
+						document.write(data_url);
+						//shapes[s] = SIDES;
+					}
+				}
+				
+				encoder.addFrame(ctx);
+			}, 1000 / FPS);
+			
+			
+			
+			
+
+		}());
+	</script>
+</body>
+
+</html>
